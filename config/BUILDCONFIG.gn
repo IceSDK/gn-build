@@ -144,7 +144,7 @@ declare_args() {
   # Label of the external projects directory.
   # By convention, all 3rd-party projects should end up in this directory, so they
   # can depend on each other (e.g. $external/mysql_connector -> $external/zlib)
-  external = "//external"
+  external = "//third-party"
 
   # DON'T ADD MORE FLAGS HERE. Read the comment above.
 }
@@ -203,11 +203,7 @@ if (host_toolchain == "") {
 _default_toolchain = ""
 
 if (target_os == "android") {
-  if (is_clang) {
-    _default_toolchain = "//build/toolchain/android:android_clang_$target_cpu"
-  } else {
-    _default_toolchain = "//build/toolchain/android:android_$target_cpu"
-  }
+  _default_toolchain = "//build/toolchain/android:android_clang_$target_cpu"
 } else if (target_os == "ios") {
   _default_toolchain = "//build/toolchain/mac:ios_clang_$target_cpu"
 } else if (target_os == "mac") {
@@ -227,6 +223,9 @@ if (target_os == "android") {
   assert(target_cpu == "x86" || target_cpu == "x64" || target_cpu == "arm" ||
          target_cpu == "arm64")
   _default_toolchain = "//build/toolchain/win:uwp_$target_cpu"
+} else if (target_os == "emscripten") {
+  assert(target_cpu == "wasm32" || target_cpu == "wasm64")
+  _default_toolchain = "//build/toolchain/emscripten:clang_$target_cpu"
 } else {
   if (is_clang) {
     _default_toolchain = "//build/toolchain/posix:clang_$target_cpu"
@@ -265,6 +264,7 @@ if (current_os == "win" || current_os == "winuwp") {
   is_posix = false
   is_win = true
   is_freebsd = false
+  is_emscripten = false
 } else if (current_os == "mac") {
   is_android = false
   is_ios = false
@@ -273,6 +273,7 @@ if (current_os == "win" || current_os == "winuwp") {
   is_posix = true
   is_win = false
   is_freebsd = false
+  is_emscripten = false
 } else if (current_os == "android") {
   is_android = true
   is_ios = false
@@ -281,6 +282,7 @@ if (current_os == "win" || current_os == "winuwp") {
   is_posix = true
   is_win = false
   is_freebsd = false
+  is_emscripten = false
 } else if (current_os == "ios") {
   is_android = false
   is_ios = true
@@ -289,6 +291,7 @@ if (current_os == "win" || current_os == "winuwp") {
   is_posix = true
   is_win = false
   is_freebsd = false
+  is_emscripten = false
 } else if (current_os == "linux") {
   is_android = false
   is_ios = false
@@ -297,6 +300,7 @@ if (current_os == "win" || current_os == "winuwp") {
   is_posix = true
   is_win = false
   is_freebsd = false
+  is_emscripten = false
 } else if (current_os == "freebsd") {
   is_android = false
   is_ios = false
@@ -305,6 +309,16 @@ if (current_os == "win" || current_os == "winuwp") {
   is_posix = true
   is_win = false
   is_freebsd = true
+  is_emscripten = false
+} else if (current_os == "emscripten") {
+  is_android = false
+  is_ios = false
+  is_linux = false
+  is_mac = false
+  is_posix = false
+  is_win = false
+  is_freebsd = false
+  is_emscripten = true
 }
 
 # =============================================================================
@@ -328,7 +342,7 @@ default_compiler_configs = [
   "//build/config:default_optimization",
   "//build/config:default_stack_frames",
   "//build/config:default_symbols",
-  "//build/config:c++11",
+  "//build/config:c++17",
   "//build/config:rtti",
   "//build/config:exceptions",
   "//build/config:runtime_library",
@@ -343,11 +357,6 @@ if (is_win) {
     "//build/config/win:winver",
     "//build/config/win:vs_code_analysis",
   ]
-}
-
-if (is_android) {
-  default_compiler_configs +=
-      [ "//build/config/android:default_cygprofile_instrumentation" ]
 }
 
 # Debug/release-related defines.

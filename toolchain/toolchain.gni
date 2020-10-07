@@ -20,10 +20,12 @@ assert(symbol_level >= 0 && symbol_level <= 2, "Invalid symbol_level")
 # Extension for shared library files (including leading dot).
 if (is_mac) {
   shlib_extension = ".dylib"
-} else if (is_posix) {
+} else if (is_posix || is_android) {
   shlib_extension = ".so"
 } else if (is_win) {
   shlib_extension = ".dll"
+} else if (is_emscripten) {
+  shlib_extension = ".wasm"
 } else {
   assert(false, "Platform not supported")
 }

@@ -19,10 +19,6 @@ if (is_mac) {
   import("//build/toolchain/mac/settings.gni")
 }
 
-if (is_android) {
-  import("//build/toolchain/android/settings.gni")
-}
-
 import("//build/toolchain/compiler_version.gni")
 
 declare_args() {
@@ -60,7 +56,7 @@ declare_args() {
   gdb_index = false
 
   # Enable fatal linker warnings.
-  fatal_linker_warnings = true
+  fatal_linker_warnings = false
 
   # AFDO (Automatic Feedback Directed Optimizer) is a form of profile-guided
   # optimization that GCC supports. It used by ChromeOS in their official
@@ -134,8 +130,6 @@ config("compiler") {
   # smaller.
   if (is_win) {
     configs += [ "//build/config/win:compiler" ]
-  } else if (is_android) {
-    configs += [ "//build/config/android:compiler" ]
   } else if (is_ios || is_mac) {
     configs += [ "//build/config/mac:compiler" ]
   }
@@ -214,18 +208,14 @@ config("compiler") {
 
   # Linux/Android common flags setup.
   # ---------------------------------
-  if (is_linux || is_android || is_freebsd) {
-    asmflags += [ "-fPIC" ]
-    cflags += [ "-fPIC" ]
-    ldflags += [ "-fPIC" ]
-
-    if (!is_clang) {
-      # Use pipes for communicating between sub-processes. Faster.
-      # (This flag doesn't do anything with Clang.)
-      cflags += [ "-pipe" ]
-    }
+  if (is_linux || is_android) {
+    cflags += [
+      "-fPIC",
+      "-pipe",  # Use pipes for communicating between sub-processes. Faster.
+    ]
 
     ldflags += [
+      "-fPIC",
       "-Wl,-z,noexecstack",
       "-Wl,-z,now",
       "-Wl,-z,relro",
@@ -252,22 +242,8 @@ config("compiler") {
 
   # Linux-specific compiler flags setup.
   # ------------------------------------
-  if (is_android && is_clang) {
-    _rebased_android_toolchain_root =
-        rebase_path(android_toolchain_root, root_build_dir)
-
-    # Let clang find the linker in the NDK.
-    ldflags += [ "--gcc-toolchain=$_rebased_android_toolchain_root" ]
-  }
-
   if (is_posix && use_lld) {
     ldflags += [ "-fuse-ld=lld" ]
-    if (current_cpu == "arm64") {
-      # Reduce the page size from 65536 in order to reduce binary size slightly
-      # by shrinking the alignment gap between segments. This also causes all
-      # segments to be mapped adjacently, which breakpad relies on.
-      ldflags += [ "-Wl,-z,max-page-size=4096" ]
-    }
   } else if (use_gold) {
     ldflags += [
       # Newer gccs and clangs support -fuse-ld, use the flag to force gold
@@ -276,16 +252,19 @@ config("compiler") {
       "-fuse-ld=gold",
     ]
 
-    ldflags += [ "-fuse-ld=gold" ]
-    if (!is_android) {
-      # On Android, this isn't needed.  gcc in the NDK knows to look next to
-      # it with -fuse-ld=gold, and clang gets a --gcc-toolchain flag passed
-      # above.
-      if (gold_path != "") {
-        ldflags += [ "-B$gold_path" ]
+    if (is_android) {
+      # Use -mstackrealign due to a bug on ia32 Jelly Bean.
+      # See crbug.com/521527
+      if (current_cpu == "x86") {
+        cflags += [ "-mstackrealign" ]
       }
-
+    } else {
       ldflags += [
+        # On Android, this isn't needed.  gcc in the NDK knows to look next to
+        # it with -fuse-ld=gold, and clang gets a --gcc-toolchain flag passed
+        # above.
+        "-B$gold_path",
+
         # Experimentation found that using four linking threads
         # saved ~20% of link time.
         # https://groups.google.com/a/chromium.org/group/chromium-dev/browse_thread/thread/281527606915bb36
@@ -301,8 +280,7 @@ config("compiler") {
     }
   }
 
-  if (is_posix && (use_gold || use_lld) && !using_sanitizer &&
-      !(is_android && use_order_profiling)) {
+  if (is_posix && (use_gold || use_lld) && !using_sanitizer) {
     # TODO(crbug.com/576197) - gcc on x86 platforms + gold + icf=all
     # doesn't currently work on non-chromeos platforms.
     # Additionally, on Android x86 --icf=safe seems to cause issues as well.
@@ -326,19 +304,6 @@ config("compiler") {
     cflags += [ "-fcolor-diagnostics" ]
   } else if (!is_win) {
     cflags += [ "-fdiagnostics-color" ]
-  }
-
-  if (use_lld) {
-    # TODO(thakis): Make the driver pass --color-diagnostics to the linker
-    # if -fcolor-diagnostics is passed to it, and pass -fcolor-diagnostics
-    # in ldflags instead.
-    if (is_win) {
-      # On Windows, we call the linker directly, instead of calling it through
-      # the driver.
-      ldflags += [ "--color-diagnostics" ]
-    } else {
-      ldflags += [ "-Wl,--color-diagnostics" ]
-    }
   }
 
   # Print absolute paths in diagnostics. There is no precedent for doing this
@@ -780,8 +745,6 @@ config("runtime_library") {
     configs += [ "//build/config/ios:runtime_library" ]
   } else if (is_mac) {
     configs += [ "//build/config/mac:runtime_library" ]
-  } else if (is_android) {
-    configs += [ "//build/config/android:runtime_library" ]
   }
 
   if (is_posix) {
@@ -1352,9 +1315,6 @@ config("executable_config") {
     configs += [ "//build/config/ios:ios_dynamic_flags" ]
   } else if (is_posix) {
     configs += [ "//build/config/posix:executable_ldconfig" ]
-    if (is_android) {
-      configs += [ "//build/config/android:executable_config" ]
-    }
   }
 }
 
